@@ -22,7 +22,7 @@ const BLOB_FILENAME = 'site-data.json'
 
 // Both data JSON and photo uploads use the same public blob store (BLOB_PHOTOS_TOKEN)
 function token(): string | undefined {
-  return process.env.BLOB_PHOTOS_TOKEN
+  return process.env.BLOB_PHOTOS_READ_WRITE_TOKEN
 }
 
 function isBlobConfigured(): boolean {

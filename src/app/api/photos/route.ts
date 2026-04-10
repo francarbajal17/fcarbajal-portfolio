@@ -42,13 +42,13 @@ export async function POST(req: Request) {
   const filename = `${uuid()}.${ext}`
   let filePath: string
 
-  if (process.env.BLOB_PHOTOS_TOKEN) {
+  if (process.env.BLOB_PHOTOS_READ_WRITE_TOKEN) {
     // Production: store in a dedicated public blob store
     const { put } = await import('@vercel/blob')
     const blob = await put(`photos/${filename}`, file, {
       access: 'public',
       addRandomSuffix: false,
-      token: process.env.BLOB_PHOTOS_TOKEN,
+      token: process.env.BLOB_PHOTOS_READ_WRITE_TOKEN,
     })
     filePath = blob.url
   } else {
