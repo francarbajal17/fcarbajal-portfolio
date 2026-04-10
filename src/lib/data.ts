@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs'
 import path from 'path'
+import defaultData from '@/data/photos.json'
 
 export interface Photo {
   id: string
@@ -24,17 +25,17 @@ function isBlobConfigured(): boolean {
 
 export async function getData(): Promise<SiteData> {
   if (isBlobConfigured()) {
-    const { list } = await import('@vercel/blob')
+    const { list, getDownloadUrl } = await import('@vercel/blob')
     const { blobs } = await list({ prefix: BLOB_FILENAME })
 
     if (blobs.length > 0) {
-      const res = await fetch(blobs[0].url)
+      const downloadUrl = await getDownloadUrl(blobs[0].url)
+      const res = await fetch(downloadUrl, { cache: 'no-store' })
       return res.json() as Promise<SiteData>
     }
 
-    // First run: seed Blob from the bundled JSON file
-    const raw = await fs.readFile(DATA_PATH, 'utf-8')
-    const initial = JSON.parse(raw) as SiteData
+    // First run: seed Blob from the bundled default data
+    const initial = defaultData as SiteData
     await _blobSave(initial)
     return initial
   }
@@ -57,7 +58,7 @@ export async function saveData(data: SiteData): Promise<void> {
 async function _blobSave(data: SiteData): Promise<void> {
   const { put } = await import('@vercel/blob')
   await put(BLOB_FILENAME, JSON.stringify(data, null, 2), {
-    access: 'public',
+    access: 'private',
     addRandomSuffix: false,
     contentType: 'application/json',
   })
