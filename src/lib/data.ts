@@ -20,22 +20,25 @@ export interface SiteData {
 const DATA_PATH = path.join(process.cwd(), 'src/data/photos.json')
 const BLOB_FILENAME = 'site-data.json'
 
+// Both data JSON and photo uploads use the same public blob store (BLOB_PHOTOS_TOKEN)
+function token(): string | undefined {
+  return process.env.BLOB_PHOTOS_TOKEN
+}
+
 function isBlobConfigured(): boolean {
-  return !!process.env.BLOB_READ_WRITE_TOKEN
+  return !!token()
 }
 
 export async function getData(): Promise<SiteData> {
-  // Prevent Next.js from caching this — always read fresh data
   unstable_noStore()
 
   if (isBlobConfigured()) {
-    const { list, head } = await import('@vercel/blob')
-    const { blobs } = await list({ prefix: BLOB_FILENAME })
+    const { list } = await import('@vercel/blob')
+    const { blobs } = await list({ prefix: BLOB_FILENAME, token: token() })
 
     if (blobs.length > 0) {
-      // head() returns a short-lived signed downloadUrl — required for private stores
-      const { downloadUrl } = await head(blobs[0].url)
-      const res = await fetch(downloadUrl, { cache: 'no-store' })
+      // Public blob — fetch directly, no auth needed
+      const res = await fetch(blobs[0].url, { cache: 'no-store' })
       return res.json() as Promise<SiteData>
     }
 
@@ -63,9 +66,10 @@ export async function saveData(data: SiteData): Promise<void> {
 async function _blobSave(data: SiteData): Promise<void> {
   const { put } = await import('@vercel/blob')
   await put(BLOB_FILENAME, JSON.stringify(data, null, 2), {
-    access: 'private',
+    access: 'public',
     addRandomSuffix: false,
     allowOverwrite: true,
     contentType: 'application/json',
+    token: token(),
   })
 }
