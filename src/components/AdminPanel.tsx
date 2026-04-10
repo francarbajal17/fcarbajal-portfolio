@@ -23,6 +23,11 @@ export default function AdminPanel({ data: initialData }: { data: SiteData }) {
   const [addCat, setAddCat] = useState<Photo['cat']>('landscape')
   const [addLoc, setAddLoc] = useState('Montevideo')
   const [uploading, setUploading] = useState(false)
+  // Cover upload
+  const [uploadingCover, setUploadingCover] = useState(false)
+  const coverFileRef = useRef<HTMLInputElement>(null)
+  // Drag reorder for photos
+  const dragPhotoId = useRef<string | null>(null)
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -89,12 +94,52 @@ export default function AdminPanel({ data: initialData }: { data: SiteData }) {
     setUploading(false)
   }
 
-  // ── Update cover order ─────────────────────────────────────────────────────
-  const moveCover = (from: number, to: number) => {
-    const covers = [...data.covers]
-    const [item] = covers.splice(from, 1)
-    covers.splice(to, 0, item)
-    setData(d => ({ ...d, covers }))
+  // ── Cover: upload new ─────────────────────────────────────────────────────
+  const addCover = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    if (data.covers.length >= 5) { alert('Máximo 5 portadas.'); return }
+    setUploadingCover(true)
+    const fd = new FormData()
+    fd.append('file', f)
+    fd.append('title', 'Portada')
+    fd.append('cat', 'landscape')
+    fd.append('loc', '')
+    fd.append('isCover', 'true')
+    const res = await fetch('/api/photos', { method: 'POST', body: fd })
+    if (res.ok) {
+      const { photo } = await res.json()
+      setData(d => ({ ...d, covers: [...d.covers, photo.file] }))
+    } else {
+      alert('Error al subir la portada.')
+    }
+    setUploadingCover(false)
+    // reset input so same file can be re-selected
+    if (coverFileRef.current) coverFileRef.current.value = ''
+  }
+
+  // ── Cover: delete ──────────────────────────────────────────────────────────
+  const deleteCover = (i: number) => {
+    if (data.covers.length <= 1) { alert('Tiene que quedar al menos una portada.'); return }
+    if (!confirm('¿Eliminar esta portada?')) return
+    setData(d => ({ ...d, covers: d.covers.filter((_, idx) => idx !== i) }))
+  }
+
+  // ── Photo grid drag reorder ────────────────────────────────────────────────
+  const onDragStart = (id: string) => { dragPhotoId.current = id }
+  const onDragOver  = (e: React.DragEvent) => { e.preventDefault() }
+  const onDrop      = (targetId: string) => {
+    const from = dragPhotoId.current
+    if (!from || from === targetId) return
+    setData(d => {
+      const photos = [...d.photos]
+      const fi = photos.findIndex(p => p.id === from)
+      const ti = photos.findIndex(p => p.id === targetId)
+      const [item] = photos.splice(fi, 1)
+      photos.splice(ti, 0, item)
+      return { ...d, photos }
+    })
+    dragPhotoId.current = null
   }
 
   return (
@@ -117,25 +162,68 @@ export default function AdminPanel({ data: initialData }: { data: SiteData }) {
 
         {/* COVERS */}
         <section className={styles.section}>
-          <p className={styles.sectionLabel}>Portadas — orden de rotación</p>
+          <div className={styles.sectionHeader}>
+            <p className={styles.sectionLabel}>
+              Portadas — {data.covers.length} / 5
+            </p>
+            {data.covers.length < 5 && (
+              <button
+                className={`${styles.btn} ${styles.primary}`}
+                onClick={() => coverFileRef.current?.click()}
+                disabled={uploadingCover}
+              >
+                {uploadingCover ? 'Subiendo…' : '+ Agregar portada'}
+              </button>
+            )}
+            <input
+              ref={coverFileRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={addCover}
+            />
+          </div>
           <div className={styles.coversGrid}>
             {data.covers.map((src, i) => (
-              <div key={src} className={styles.coverItem}>
+              <div key={src + i} className={styles.coverItem}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={src} alt={`Portada ${i + 1}`} />
                 <span className={styles.coverNum}>{i + 1}</span>
                 <div className={styles.coverActions}>
-                  {i > 0 && (
-                    <button className={styles.coverBtn} onClick={() => moveCover(i, i - 1)}>↑</button>
-                  )}
-                  {i < data.covers.length - 1 && (
-                    <button className={styles.coverBtn} onClick={() => moveCover(i, i + 1)}>↓</button>
-                  )}
+                  <button
+                    className={styles.coverBtn}
+                    onClick={() => {
+                      const covers = [...data.covers]
+                      const [item] = covers.splice(i, 1)
+                      covers.splice(Math.max(0, i - 1), 0, item)
+                      setData(d => ({ ...d, covers }))
+                    }}
+                    disabled={i === 0}
+                    title="Mover antes"
+                  >←</button>
+                  <button
+                    className={styles.coverBtn}
+                    onClick={() => {
+                      const covers = [...data.covers]
+                      const [item] = covers.splice(i, 1)
+                      covers.splice(Math.min(covers.length, i + 1), 0, item)
+                      setData(d => ({ ...d, covers }))
+                    }}
+                    disabled={i === data.covers.length - 1}
+                    title="Mover después"
+                  >→</button>
+                  <button
+                    className={`${styles.coverBtn} ${styles.coverDel}`}
+                    onClick={() => deleteCover(i)}
+                    title="Eliminar portada"
+                  >✕</button>
                 </div>
               </div>
             ))}
           </div>
-          <p className={styles.hint}>Usá las flechas para cambiar el orden. Guardá para aplicar.</p>
+          <p className={styles.hint}>
+            Entre 1 y 5 portadas. Usá las flechas para reordenar. Guardá para aplicar.
+          </p>
         </section>
 
         {/* SOCIAL LINKS */}
@@ -159,16 +247,24 @@ export default function AdminPanel({ data: initialData }: { data: SiteData }) {
         {/* PHOTOS */}
         <section className={styles.section}>
           <div className={styles.sectionHeader}>
-            <p className={styles.sectionLabel}>Fotos ({data.photos.length})</p>
+            <p className={styles.sectionLabel}>Fotos ({data.photos.length}) — arrastrá para reordenar</p>
             <button className={`${styles.btn} ${styles.primary}`} onClick={() => setShowAdd(true)}>
               + Agregar foto
             </button>
           </div>
           <div className={styles.photoGrid}>
             {data.photos.map(p => (
-              <div key={p.id} className={styles.photoItem}>
+              <div
+                key={p.id}
+                className={styles.photoItem}
+                draggable
+                onDragStart={() => onDragStart(p.id)}
+                onDragOver={onDragOver}
+                onDrop={() => onDrop(p.id)}
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={p.file} alt={p.title} loading="lazy" />
+                <div className={styles.dragHandle} title="Arrastrá para reordenar">⠿</div>
                 <div className={styles.photoInfo}>
                   <span className={styles.photoTitle}>{p.title}</span>
                   <span className={styles.photoCat}>{CAT_LABEL[p.cat]}</span>

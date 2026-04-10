@@ -36,10 +36,15 @@
 .coversGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .coverItem { position: relative; aspect-ratio: 16/9; overflow: hidden; border: 1px solid #1a1a1a; }
 .coverItem img { width: 100%; height: 100%; object-fit: cover; filter: brightness(.55); }
-.coverNum { position: absolute; top: 10px; left: 12px; font-family: var(--serif); font-size: 28px; color: var(--text); opacity: .5; }
-.coverActions { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 4px; }
-.coverBtn { background: rgba(0,0,0,.7); border: 1px solid #333; color: var(--muted); font-size: 14px; padding: 4px 8px; cursor: pointer; transition: all .2s; line-height: 1; }
-.coverBtn:hover { color: var(--text); border-color: #555; }
+.coverNum { position: absolute; top: 10px; left: 12px; font-family: var(--serif); font-size: 28px; color: var(--text); opacity: .5; pointer-events: none; }
+.coverActions { position: absolute; bottom: 10px; right: 8px; display: flex; flex-direction: row; gap: 4px; }
+.coverBtn {
+  background: rgba(0,0,0,.75); border: 1px solid #444; color: var(--muted);
+  font-size: 13px; padding: 5px 9px; cursor: pointer; transition: all .2s; line-height: 1;
+}
+.coverBtn:hover:not(:disabled) { color: var(--text); border-color: #666; }
+.coverBtn:disabled { opacity: .2; cursor: default; }
+.coverDel:hover { color: #e05555 !important; border-color: #6a2a2a !important; }
 
 /* SOCIAL */
 .socialForm { display: flex; flex-direction: column; gap: 0; max-width: 500px; }
@@ -51,9 +56,23 @@
 
 /* PHOTO GRID */
 .photoGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
-.photoItem { position: relative; aspect-ratio: 3/4; overflow: hidden; background: #111; border: 1px solid #1a1a1a; }
+.photoItem {
+  position: relative; aspect-ratio: 3/4; overflow: hidden;
+  background: #111; border: 1px solid #1a1a1a;
+  cursor: grab;
+  transition: outline 0.15s;
+}
+.photoItem:active { cursor: grabbing; }
+.photoItem[draggable]:hover { outline: 1px solid #333; }
 .photoItem img { width: 100%; height: 100%; object-fit: cover; filter: brightness(.65); transition: filter .25s; }
 .photoItem:hover img { filter: brightness(.85); }
+.dragHandle {
+  position: absolute; top: 8px; left: 8px;
+  color: rgba(255,255,255,.25); font-size: 18px; line-height: 1;
+  pointer-events: none; letter-spacing: -2px;
+  transition: color .2s;
+}
+.photoItem:hover .dragHandle { color: rgba(255,255,255,.5); }
 .photoInfo { position: absolute; bottom: 0; left: 0; right: 0; padding: 10px; background: linear-gradient(to top, rgba(0,0,0,.85), transparent); display: flex; flex-direction: column; gap: 2px; }
 .photoTitle { font-family: var(--serif); font-size: 14px; color: var(--text); }
 .photoCat { font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }

@@ -45,12 +45,15 @@
 }
 .heroSlide {
   position: absolute; inset: 0;
-  background-size: cover; background-position: center;
-  filter: brightness(0.28) saturate(0.65);
-  transform: scale(1.04);
   opacity: 0; transition: opacity 1.2s ease;
+  transform: scale(1.04);
+  overflow: hidden;
 }
 .heroSlide.active { opacity: 1; }
+/* Darken + desaturate the Next.js Image inside each slide */
+.heroSlide img {
+  filter: brightness(0.28) saturate(0.65) !important;
+}
 .heroVignette {
   position: absolute; inset: 0;
   background: linear-gradient(
@@ -111,8 +114,16 @@
 .grid { columns: 3; column-gap: 10px; }
 .gridItem { break-inside: avoid; margin-bottom: 10px; position: relative; overflow: hidden; cursor: pointer; }
 .gridItem.hidden { display: none; }
-.gridItem img { width: 100%; display: block; transition: transform 0.5s ease; }
-.gridItem:hover img { transform: scale(1.02); }
+/* Wrapper that gives height to the fill Image */
+.gridImgWrap {
+  position: relative; width: 100%; display: block;
+}
+/* Alternate aspect ratios for masonry feel */
+.gridItem:nth-child(3n+1) .gridImgWrap { aspect-ratio: 3/4; }
+.gridItem:nth-child(3n+2) .gridImgWrap { aspect-ratio: 4/5; }
+.gridItem:nth-child(3n)   .gridImgWrap { aspect-ratio: 2/3; }
+.gridImgWrap img { transition: transform 0.5s ease !important; }
+.gridItem:hover .gridImgWrap img { transform: scale(1.02) !important; }
 .itemOverlay {
   position: absolute; inset: 0;
   background: linear-gradient(to top, rgba(5,5,5,0.75) 0%, transparent 55%);
@@ -128,8 +139,12 @@
   position: fixed; inset: 0; background: rgba(5,5,5,0.97); z-index: 200;
   display: flex; align-items: center; justify-content: center;
 }
-.lbImg { max-width: 80vw; max-height: 82vh; display: flex; align-items: center; justify-content: center; }
-.lbImg img { max-width: 100%; max-height: 82vh; object-fit: contain; display: block; }
+.lbImg {
+  position: relative;
+  width: min(80vw, 1200px);
+  height: min(82vh, 900px);
+}
+.lbImg img { object-fit: contain !important; }
 .lbClose {
   position: absolute; top: 28px; right: 36px;
   background: none; border: none; cursor: pointer;
@@ -155,8 +170,7 @@
   display: grid; grid-template-columns: auto 1fr; gap: 64px;
   align-items: start; max-width: 860px;
 }
-.aboutPhoto { width: 130px; height: 130px; border-radius: 50%; overflow: hidden; flex-shrink: 0; border: 1px solid #1a1a1a; }
-.aboutPhoto img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+.aboutPhoto { position: relative; width: 130px; height: 130px; border-radius: 50%; overflow: hidden; flex-shrink: 0; border: 1px solid #1a1a1a; }
 .aboutLabel { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin-bottom: 20px; }
 .aboutText { font-family: var(--serif); font-size: 19px; font-weight: 300; color: #999; line-height: 1.75; }
 .aboutText em { font-style: italic; color: var(--text); }
@@ -208,12 +222,16 @@
   .gallery { padding: 56px 24px 80px; }
   .grid { columns: 2; column-gap: 8px; }
   .gridItem { margin-bottom: 8px; }
+  .gridItem:nth-child(3n+1) .gridImgWrap,
+  .gridItem:nth-child(3n+2) .gridImgWrap,
+  .gridItem:nth-child(3n)   .gridImgWrap { aspect-ratio: 4/5; }
   .about { padding: 56px 24px 64px; grid-template-columns: 1fr; gap: 32px; max-width: 100%; }
   .contact { padding: 56px 24px 80px; }
   .footer { padding: 24px; }
 }
 @media (max-width: 480px) {
   .grid { columns: 1; }
+  .gridItem:nth-child(n) .gridImgWrap { aspect-ratio: 4/3; }
   .heroSocials { flex-wrap: wrap; gap: 14px; }
   .socialSep { display: none; }
 }

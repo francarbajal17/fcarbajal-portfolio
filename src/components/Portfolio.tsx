@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import Image from 'next/image'
 import type { SiteData, Photo } from '@/lib/data'
 import styles from './Portfolio.module.css'
 
@@ -106,8 +107,17 @@ export default function Portfolio({ data }: { data: SiteData }) {
           <div
             key={src}
             className={`${styles.heroSlide} ${i === heroIdx ? styles.active : ''}`}
-            style={{ backgroundImage: `url(${src})` }}
-          />
+          >
+            <Image
+              src={src}
+              alt={`Portada ${i + 1}`}
+              fill
+              sizes="100vw"
+              quality={90}
+              priority={i === 0}
+              style={{ objectFit: 'cover', objectPosition: 'center' }}
+            />
+          </div>
         ))}
         <div className={styles.heroVignette} />
         <div className={styles.heroContent}>
@@ -182,8 +192,16 @@ export default function Portfolio({ data }: { data: SiteData }) {
                 if (idx >= 0) openLb(idx)
               }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.file} alt={p.title} loading="lazy" />
+              <div className={styles.gridImgWrap}>
+                <Image
+                  src={p.file}
+                  alt={p.title}
+                  fill
+                  sizes="(max-width: 480px) 100vw, (max-width: 860px) 50vw, 33vw"
+                  quality={85}
+                  style={{ objectFit: 'cover' }}
+                />
+              </div>
               <div className={styles.itemOverlay}>
                 <div className={styles.itemTitle}>{p.title}</div>
                 <div className={styles.itemCat}>{CAT_LABEL[p.cat]}</div>
@@ -208,8 +226,14 @@ export default function Portfolio({ data }: { data: SiteData }) {
           <button className={styles.lbClose} onClick={closeLb}>✕</button>
           <button className={`${styles.lbNav} ${styles.lbPrev}`} onClick={() => navLb(-1)}>←</button>
           <div className={styles.lbImg}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={visible[lbIdx].file} alt={visible[lbIdx].title} />
+            <Image
+              src={visible[lbIdx].file}
+              alt={visible[lbIdx].title}
+              fill
+              sizes="80vw"
+              quality={95}
+              style={{ objectFit: 'contain' }}
+            />
           </div>
           <button className={`${styles.lbNav} ${styles.lbNext}`} onClick={() => navLb(1)}>→</button>
           <div className={styles.lbInfo}>
@@ -222,8 +246,14 @@ export default function Portfolio({ data }: { data: SiteData }) {
       {/* ABOUT */}
       <section id="about" className={styles.about}>
         <div className={styles.aboutPhoto}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/photos/profile.jpg" alt="Fran Carbajal" />
+          <Image
+            src="/photos/profile.jpg"
+            alt="Fran Carbajal"
+            fill
+            sizes="130px"
+            quality={90}
+            style={{ objectFit: 'cover', objectPosition: 'center top' }}
+          />
         </div>
         <div>
           <p className={styles.aboutLabel}>Sobre mí</p>

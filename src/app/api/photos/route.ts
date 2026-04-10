@@ -11,7 +11,7 @@ export async function GET() {
   return NextResponse.json(data)
 }
 
-// Save photo data (order, metadata, covers)
+// Save full data (order, metadata, covers)
 export async function PUT(req: Request) {
   if (!(await isAuthenticated())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -21,38 +21,47 @@ export async function PUT(req: Request) {
   return NextResponse.json({ ok: true })
 }
 
-// Upload new photo
+// Upload a new photo or cover image
 export async function POST(req: Request) {
   if (!(await isAuthenticated())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const formData = await req.formData()
-  const file = formData.get('file') as File
-  const title = formData.get('title') as string || 'Sin título'
-  const cat   = formData.get('cat')   as string || 'landscape'
-  const loc   = formData.get('loc')   as string || 'Montevideo'
+  const file    = formData.get('file')    as File
+  const title   = formData.get('title')   as string || 'Sin título'
+  const cat     = formData.get('cat')     as string || 'landscape'
+  const loc     = formData.get('loc')     as string || 'Montevideo'
+  const isCover = formData.get('isCover') === 'true'
 
   if (!file) {
     return NextResponse.json({ error: 'No file' }, { status: 400 })
   }
 
-  const bytes = await file.arrayBuffer()
-  const buffer = Buffer.from(bytes)
-  const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+  const bytes    = await file.arrayBuffer()
+  const buffer   = Buffer.from(bytes)
+  const ext      = file.name.split('.').pop()?.toLowerCase() || 'jpg'
   const filename = `${uuid()}.${ext}`
   const photosDir = path.join(process.cwd(), 'public/photos')
 
   if (!existsSync(photosDir)) await mkdir(photosDir, { recursive: true })
   await writeFile(path.join(photosDir, filename), buffer)
 
+  const filePath = `/photos/${filename}`
+
+  // Cover uploads: just return the path, don't add to photos array
+  if (isCover) {
+    return NextResponse.json({ ok: true, photo: { file: filePath } })
+  }
+
+  // Regular photo: add to photos array and persist
   const data = await getData()
   const newPhoto = {
-    id: uuid(),
+    id:    uuid(),
     title,
-    cat: cat as 'landscape' | 'street' | 'portrait',
+    cat:   cat as 'landscape' | 'street' | 'portrait',
     loc,
-    file: `/photos/${filename}`,
+    file:  filePath,
   }
   data.photos.push(newPhoto)
   await saveData(data)
