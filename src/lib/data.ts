@@ -25,12 +25,14 @@ function isBlobConfigured(): boolean {
 
 export async function getData(): Promise<SiteData> {
   if (isBlobConfigured()) {
-    const { list, getDownloadUrl } = await import('@vercel/blob')
+    const { list } = await import('@vercel/blob')
     const { blobs } = await list({ prefix: BLOB_FILENAME })
 
     if (blobs.length > 0) {
-      const downloadUrl = await getDownloadUrl(blobs[0].url)
-      const res = await fetch(downloadUrl, { cache: 'no-store' })
+      const res = await fetch(blobs[0].url, {
+        headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+        cache: 'no-store',
+      })
       return res.json() as Promise<SiteData>
     }
 
@@ -60,6 +62,7 @@ async function _blobSave(data: SiteData): Promise<void> {
   await put(BLOB_FILENAME, JSON.stringify(data, null, 2), {
     access: 'private',
     addRandomSuffix: false,
+    allowOverwrite: true,
     contentType: 'application/json',
   })
 }
