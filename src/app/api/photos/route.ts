@@ -38,30 +38,40 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No file' }, { status: 400 })
   }
 
-  const bytes    = await file.arrayBuffer()
-  const buffer   = Buffer.from(bytes)
   const ext      = file.name.split('.').pop()?.toLowerCase() || 'jpg'
   const filename = `${uuid()}.${ext}`
-  const photosDir = path.join(process.cwd(), 'public/photos')
+  let filePath: string
 
-  if (!existsSync(photosDir)) await mkdir(photosDir, { recursive: true })
-  await writeFile(path.join(photosDir, filename), buffer)
+  if (process.env.BLOB_PHOTOS_TOKEN) {
+    // Production: store in a dedicated public blob store
+    const { put } = await import('@vercel/blob')
+    const blob = await put(`photos/${filename}`, file, {
+      access: 'public',
+      addRandomSuffix: false,
+      token: process.env.BLOB_PHOTOS_TOKEN,
+    })
+    filePath = blob.url
+  } else {
+    // Local dev fallback: write to public/photos/
+    const bytes     = await file.arrayBuffer()
+    const buffer    = Buffer.from(bytes)
+    const photosDir = path.join(process.cwd(), 'public/photos')
+    if (!existsSync(photosDir)) await mkdir(photosDir, { recursive: true })
+    await writeFile(path.join(photosDir, filename), buffer)
+    filePath = `/photos/${filename}`
+  }
 
-  const filePath = `/photos/${filename}`
-
-  // Cover uploads: just return the path, don't add to photos array
   if (isCover) {
     return NextResponse.json({ ok: true, photo: { file: filePath } })
   }
 
-  // Regular photo: add to photos array and persist
   const data = await getData()
   const newPhoto = {
-    id:    uuid(),
+    id:   uuid(),
     title,
-    cat:   cat as 'landscape' | 'street' | 'portrait',
+    cat:  cat as 'landscape' | 'street' | 'portrait',
     loc,
-    file:  filePath,
+    file: filePath,
   }
   data.photos.push(newPhoto)
   await saveData(data)

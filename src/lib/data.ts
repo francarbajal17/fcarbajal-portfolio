@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs'
 import path from 'path'
+import { unstable_noStore } from 'next/cache'
 import defaultData from '@/data/photos.json'
 
 export interface Photo {
@@ -24,19 +25,21 @@ function isBlobConfigured(): boolean {
 }
 
 export async function getData(): Promise<SiteData> {
+  // Prevent Next.js from caching this — always read fresh data
+  unstable_noStore()
+
   if (isBlobConfigured()) {
-    const { list } = await import('@vercel/blob')
+    const { list, head } = await import('@vercel/blob')
     const { blobs } = await list({ prefix: BLOB_FILENAME })
 
     if (blobs.length > 0) {
-      const res = await fetch(blobs[0].url, {
-        headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
-        cache: 'no-store',
-      })
+      // head() returns a short-lived signed downloadUrl — required for private stores
+      const { downloadUrl } = await head(blobs[0].url)
+      const res = await fetch(downloadUrl, { cache: 'no-store' })
       return res.json() as Promise<SiteData>
     }
 
-    // First run: seed Blob from the bundled default data
+    // First run: seed from bundled default data
     const initial = defaultData as SiteData
     await _blobSave(initial)
     return initial
