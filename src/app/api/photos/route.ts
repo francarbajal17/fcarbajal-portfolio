@@ -45,9 +45,11 @@ export async function POST(req: Request) {
   if (process.env.BLOB_PHOTOS_READ_WRITE_TOKEN) {
     // Production: store in a dedicated public blob store
     const { put } = await import('@vercel/blob')
-    const blob = await put(`photos/${filename}`, file, {
+    const folder = isCover ? 'portada' : 'portfolio'
+    const blob = await put(`${folder}/${filename}`, file, {
       access: 'public',
       addRandomSuffix: false,
+      allowOverwrite: true,
       token: process.env.BLOB_PHOTOS_READ_WRITE_TOKEN,
     })
     filePath = blob.url

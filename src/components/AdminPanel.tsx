@@ -23,6 +23,7 @@ export default function AdminPanel({ data: initialData }: { data: SiteData }) {
   const [addCat, setAddCat] = useState<Photo['cat']>('landscape')
   const [addLoc, setAddLoc] = useState('Montevideo')
   const [uploading, setUploading] = useState(false)
+  const [migrating, setMigrating] = useState(false)
   // Cover upload
   const [uploadingCover, setUploadingCover] = useState(false)
   const coverFileRef = useRef<HTMLInputElement>(null)
@@ -42,6 +43,22 @@ export default function AdminPanel({ data: initialData }: { data: SiteData }) {
     setSaving(false)
     setSaveMsg(res.ok ? '✓ Guardado' : '✗ Error al guardar')
     setTimeout(() => setSaveMsg(''), 3000)
+  }
+
+  // ── Migrate local photos to Blob ───────────────────────────────────────────
+  const migrate = async () => {
+    if (!confirm('Esto migrará todas las fotos del repo a Vercel Blob. ¿Continuar?')) return
+    setMigrating(true)
+    const res = await fetch('/api/migrate', { method: 'POST' })
+    const json = await res.json()
+    setMigrating(false)
+    if (res.ok) {
+      setSaveMsg(`✓ ${json.migrated} fotos migradas a Blob`)
+      setTimeout(() => { setSaveMsg(''); router.refresh() }, 2000)
+    } else {
+      setSaveMsg('✗ Error al migrar')
+      setTimeout(() => setSaveMsg(''), 3000)
+    }
   }
 
   // ── Logout ─────────────────────────────────────────────────────────────────
@@ -153,6 +170,9 @@ export default function AdminPanel({ data: initialData }: { data: SiteData }) {
           {saveMsg && <span className={styles.saveMsg}>{saveMsg}</span>}
           <button className={`${styles.btn} ${styles.primary}`} onClick={save} disabled={saving}>
             {saving ? 'Guardando…' : 'Guardar todo'}
+          </button>
+          <button className={styles.btn} onClick={migrate} disabled={migrating}>
+            {migrating ? 'Migrando…' : 'Migrar fotos a Blob'}
           </button>
           <button className={styles.btn} onClick={logout}>Cerrar sesión</button>
         </div>
