@@ -8,6 +8,9 @@ const nextConfig = {
       },
     ],
     formats: ['image/webp', 'image/avif'],
+    localPatterns: [
+      { pathname: '/api/images/**' },
+    ],
   },
 }
 

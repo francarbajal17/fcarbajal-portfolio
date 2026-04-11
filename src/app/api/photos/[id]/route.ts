@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
 import { isAuthenticated } from '@/lib/auth'
-import { ObjectId } from 'mongodb'
+import { GridFSBucket, ObjectId } from 'mongodb'
 
 export async function DELETE(
   _req: Request,
@@ -12,13 +12,19 @@ export async function DELETE(
   }
 
   const db = await getDb()
-  const result = await db
-    .collection('images')
-    .deleteOne({ _id: new ObjectId(params.id) })
+  const doc = await db.collection('images').findOne({ _id: new ObjectId(params.id) })
 
-  if (result.deletedCount === 0) {
+  if (!doc) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
+
+  // Delete file from GridFS if it was uploaded there
+  if (doc.gridfsId) {
+    const bucket = new GridFSBucket(db, { bucketName: 'photos' })
+    await bucket.delete(new ObjectId(doc.gridfsId)).catch(() => {})
+  }
+
+  await db.collection('images').deleteOne({ _id: new ObjectId(params.id) })
 
   return NextResponse.json({ ok: true })
 }

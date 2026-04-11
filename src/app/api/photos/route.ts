@@ -2,11 +2,8 @@ import { NextResponse } from 'next/server'
 import { getData } from '@/lib/data'
 import { getDb } from '@/lib/db'
 import { isAuthenticated } from '@/lib/auth'
-import { writeFile, mkdir } from 'fs/promises'
-import { existsSync } from 'fs'
-import path from 'path'
-import { v4 as uuid } from 'uuid'
-import { ObjectId } from 'mongodb'
+import { GridFSBucket, ObjectId } from 'mongodb'
+import { Readable } from 'stream'
 
 export async function GET() {
   const data = await getData()
@@ -45,12 +42,17 @@ export async function POST(req: Request) {
 
   const bytes = await file.arrayBuffer()
   const buffer = Buffer.from(bytes)
-  const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-  const filename = `${uuid()}.${ext}`
-  const photosDir = path.join(process.cwd(), 'public/photos')
+  const bucket = new GridFSBucket(db, { bucketName: 'photos' })
 
-  if (!existsSync(photosDir)) await mkdir(photosDir, { recursive: true })
-  await writeFile(path.join(photosDir, filename), buffer)
+  const fileId = await new Promise<ObjectId>((resolve, reject) => {
+    const readable = Readable.from(buffer)
+    const uploadStream = bucket.openUploadStream(file.name, {
+      contentType: file.type || 'image/jpeg',
+    })
+    readable.pipe(uploadStream)
+    uploadStream.on('finish', () => resolve(uploadStream.id as ObjectId))
+    uploadStream.on('error', reject)
+  })
 
   // Place new image at the end of its section
   const lastInSection = await col
@@ -61,7 +63,8 @@ export async function POST(req: Request) {
   const order = lastInSection.length > 0 ? lastInSection[0].order + 1 : 0
 
   const doc = {
-    url: `/photos/${filename}`,
+    url: `/api/images/${fileId.toString()}`,
+    gridfsId: fileId,
     title,
     cat: cat as 'landscape' | 'street' | 'portrait',
     loc,
@@ -73,7 +76,7 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     ok: true,
-    image: { ...doc, _id: result.insertedId.toString() },
+    image: { ...doc, _id: result.insertedId.toString(), gridfsId: fileId.toString() },
   })
 }
 
