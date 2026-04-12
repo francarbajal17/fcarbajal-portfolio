@@ -1,9 +1,11 @@
 import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
 
-const SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'dev-secret-change-in-production'
-)
+const jwtSecret = process.env.JWT_SECRET
+if (!jwtSecret && process.env.NODE_ENV === 'production') {
+  throw new Error('Missing environment variable: JWT_SECRET')
+}
+const SECRET = new TextEncoder().encode(jwtSecret || 'dev-secret-change-in-production')
 
 export async function signToken(): Promise<string> {
   return new SignJWT({ role: 'admin' })

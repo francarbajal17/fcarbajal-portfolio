@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import type { SiteData, Photo } from '@/lib/data'
+import type { SiteData, Image } from '@/lib/data'
 import styles from './AdminPanel.module.css'
 
 const CAT_LABEL: Record<string, string> = {
@@ -11,31 +11,70 @@ const CAT_LABEL: Record<string, string> = {
   portrait: 'Retrato',
 }
 
+const HERO_MAX = 5
+
 export default function AdminPanel({ data: initialData }: { data: SiteData }) {
-  const [data, setData] = useState<SiteData>(initialData)
+  const [hero, setHero] = useState<Image[]>(initialData.hero)
+  const [portfolio, setPortfolio] = useState<Image[]>(initialData.portfolio)
+  const [social, setSocial] = useState(initialData.social)
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
-  const [editPhoto, setEditPhoto] = useState<Photo | null>(null)
+
+  // Edit modal (portfolio only)
+  const [editImage, setEditImage] = useState<Image | null>(null)
+
+  // Add modal
   const [showAdd, setShowAdd] = useState(false)
+  const [addSection, setAddSection] = useState<'hero' | 'portfolio'>('portfolio')
   const [addFile, setAddFile] = useState<File | null>(null)
   const [addPreview, setAddPreview] = useState<string | null>(null)
   const [addTitle, setAddTitle] = useState('')
-  const [addCat, setAddCat] = useState<Photo['cat']>('landscape')
+  const [addCat, setAddCat] = useState<Image['cat']>('landscape')
   const [addLoc, setAddLoc] = useState('Montevideo')
   const [uploading, setUploading] = useState(false)
+
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // ── Save all data ──────────────────────────────────────────────────────────
+  // ── Reorder helpers ────────────────────────────────────────────────────────
+  const move = (
+    arr: Image[],
+    setArr: React.Dispatch<React.SetStateAction<Image[]>>,
+    from: number,
+    to: number
+  ) => {
+    setArr(prev => {
+      const next = [...prev]
+      const [item] = next.splice(from, 1)
+      next.splice(to, 0, item)
+      return next
+    })
+  }
+
+  // ── Save all ───────────────────────────────────────────────────────────────
   const save = async () => {
     setSaving(true)
-    const res = await fetch('/api/photos', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    })
+
+    const photos = [
+      ...hero.map((img, i) => ({ id: img._id, title: img.title, cat: img.cat, loc: img.loc, section: 'hero' as const, order: i })),
+      ...portfolio.map((img, i) => ({ id: img._id, title: img.title, cat: img.cat, loc: img.loc, section: 'portfolio' as const, order: i })),
+    ]
+
+    const [r1, r2] = await Promise.all([
+      fetch('/api/photos', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photos }),
+      }),
+      fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ social }),
+      }),
+    ])
+
     setSaving(false)
-    setSaveMsg(res.ok ? '✓ Guardado' : '✗ Error al guardar')
+    setSaveMsg(r1.ok && r2.ok ? '✓ Guardado' : '✗ Error al guardar')
     setTimeout(() => setSaveMsg(''), 3000)
   }
 
@@ -45,23 +84,26 @@ export default function AdminPanel({ data: initialData }: { data: SiteData }) {
     router.push('/')
   }
 
-  // ── Delete photo ───────────────────────────────────────────────────────────
-  const deletePhoto = (id: string) => {
+  // ── Delete ─────────────────────────────────────────────────────────────────
+  const deleteImage = async (id: string, section: 'hero' | 'portfolio') => {
     if (!confirm('¿Eliminar esta foto?')) return
-    setData(d => ({ ...d, photos: d.photos.filter(p => p.id !== id) }))
+    const res = await fetch(`/api/photos/${id}`, { method: 'DELETE' })
+    if (res.ok) {
+      if (section === 'hero') setHero(prev => prev.filter(i => i._id !== id))
+      else setPortfolio(prev => prev.filter(i => i._id !== id))
+    } else {
+      alert('Error al eliminar la foto.')
+    }
   }
 
-  // ── Edit photo ─────────────────────────────────────────────────────────────
+  // ── Edit (portfolio) ───────────────────────────────────────────────────────
   const saveEdit = () => {
-    if (!editPhoto) return
-    setData(d => ({
-      ...d,
-      photos: d.photos.map(p => p.id === editPhoto.id ? editPhoto : p),
-    }))
-    setEditPhoto(null)
+    if (!editImage) return
+    setPortfolio(prev => prev.map(p => p._id === editImage._id ? editImage : p))
+    setEditImage(null)
   }
 
-  // ── Add photo ──────────────────────────────────────────────────────────────
+  // ── Upload ─────────────────────────────────────────────────────────────────
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (!f) return
@@ -69,32 +111,47 @@ export default function AdminPanel({ data: initialData }: { data: SiteData }) {
     setAddPreview(URL.createObjectURL(f))
   }
 
+  const openAddModal = (section: 'hero' | 'portfolio') => {
+    setAddSection(section)
+    setShowAdd(true)
+  }
+
+  const resetAddForm = () => {
+    setAddFile(null)
+    setAddPreview(null)
+    setAddTitle('')
+    setAddCat('landscape')
+    setAddLoc('Montevideo')
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
   const submitAdd = async () => {
     if (!addFile) { alert('Elegí una imagen primero.'); return }
+    if (addSection === 'hero' && hero.length >= HERO_MAX) {
+      alert(`El hero ya tiene ${HERO_MAX} fotos (máximo permitido).`)
+      return
+    }
+
     setUploading(true)
     const fd = new FormData()
     fd.append('file', addFile)
-    fd.append('title', addTitle || 'Sin título')
+    fd.append('section', addSection)
+    fd.append('title', addTitle || '')
     fd.append('cat', addCat)
     fd.append('loc', addLoc)
+
     const res = await fetch('/api/photos', { method: 'POST', body: fd })
     if (res.ok) {
-      const { photo } = await res.json()
-      setData(d => ({ ...d, photos: [...d.photos, photo] }))
+      const { image } = await res.json()
+      if (addSection === 'hero') setHero(prev => [...prev, image])
+      else setPortfolio(prev => [...prev, image])
       setShowAdd(false)
-      setAddFile(null); setAddPreview(null); setAddTitle(''); setAddLoc('Montevideo')
+      resetAddForm()
     } else {
-      alert('Error al subir la foto.')
+      const err = await res.json().catch(() => ({}))
+      alert(err.error || 'Error al subir la foto.')
     }
     setUploading(false)
-  }
-
-  // ── Update cover order ─────────────────────────────────────────────────────
-  const moveCover = (from: number, to: number) => {
-    const covers = [...data.covers]
-    const [item] = covers.splice(from, 1)
-    covers.splice(to, 0, item)
-    setData(d => ({ ...d, covers }))
   }
 
   return (
@@ -115,30 +172,93 @@ export default function AdminPanel({ data: initialData }: { data: SiteData }) {
 
       <div className={styles.body}>
 
-        {/* COVERS */}
+        {/* PORTADA (HERO) */}
         <section className={styles.section}>
-          <p className={styles.sectionLabel}>Portadas — orden de rotación</p>
-          <div className={styles.coversGrid}>
-            {data.covers.map((src, i) => (
-              <div key={src} className={styles.coverItem}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={src} alt={`Portada ${i + 1}`} />
-                <span className={styles.coverNum}>{i + 1}</span>
-                <div className={styles.coverActions}>
-                  {i > 0 && (
-                    <button className={styles.coverBtn} onClick={() => moveCover(i, i - 1)}>↑</button>
-                  )}
-                  {i < data.covers.length - 1 && (
-                    <button className={styles.coverBtn} onClick={() => moveCover(i, i + 1)}>↓</button>
-                  )}
-                </div>
-              </div>
-            ))}
+          <div className={styles.sectionHeader}>
+            <p className={styles.sectionLabel}>
+              Portada — {hero.length}/{HERO_MAX} imágenes
+            </p>
+            <button
+              className={`${styles.btn} ${styles.primary}`}
+              onClick={() => openAddModal('hero')}
+              disabled={hero.length >= HERO_MAX}
+            >
+              + Agregar portada
+            </button>
           </div>
+
+          {hero.length === 0 ? (
+            <p className={styles.hint}>No hay imágenes de portada. Agregá hasta {HERO_MAX}.</p>
+          ) : (
+            <div className={styles.coversGrid}>
+              {hero.map((img, i) => (
+                <div key={img._id} className={styles.coverItem}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={img.url} alt={img.title || `Portada ${i + 1}`} />
+                  <span className={styles.coverNum}>{i + 1}</span>
+                  <div className={styles.coverActions}>
+                    {i > 0 && (
+                      <button className={styles.coverBtn} onClick={() => move(hero, setHero, i, i - 1)}>↑</button>
+                    )}
+                    {i < hero.length - 1 && (
+                      <button className={styles.coverBtn} onClick={() => move(hero, setHero, i, i + 1)}>↓</button>
+                    )}
+                    <button
+                      className={`${styles.coverBtn}`}
+                      style={{ color: '#e05555', borderColor: '#5a2222', marginTop: '4px' }}
+                      onClick={() => deleteImage(img._id, 'hero')}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <p className={styles.hint}>Usá las flechas para cambiar el orden. Guardá para aplicar.</p>
         </section>
 
-        {/* SOCIAL LINKS */}
+        {/* PORTAFOLIO */}
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <p className={styles.sectionLabel}>Portafolio — {portfolio.length} {portfolio.length === 1 ? 'foto' : 'fotos'}</p>
+            <button className={`${styles.btn} ${styles.primary}`} onClick={() => openAddModal('portfolio')}>
+              + Agregar foto
+            </button>
+          </div>
+
+          {portfolio.length === 0 ? (
+            <p className={styles.hint}>No hay fotos en el portafolio todavía.</p>
+          ) : (
+            <div className={styles.photoGrid}>
+              {portfolio.map((p, i) => (
+                <div key={p._id} className={styles.photoItem}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p.url} alt={p.title} loading="lazy" />
+                  <div className={styles.photoInfo}>
+                    <span className={styles.photoTitle}>{p.title || '—'}</span>
+                    <span className={styles.photoCat}>{CAT_LABEL[p.cat]}</span>
+                    <span className={styles.photoLoc}>{p.loc}</span>
+                  </div>
+                  <div className={styles.photoActions}>
+                    <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+                      {i > 0 && (
+                        <button className={styles.actionBtn} onClick={() => move(portfolio, setPortfolio, i, i - 1)}>↑</button>
+                      )}
+                      {i < portfolio.length - 1 && (
+                        <button className={styles.actionBtn} onClick={() => move(portfolio, setPortfolio, i, i + 1)}>↓</button>
+                      )}
+                    </div>
+                    <button className={styles.actionBtn} onClick={() => setEditImage({ ...p })}>Editar</button>
+                    <button className={`${styles.actionBtn} ${styles.del}`} onClick={() => deleteImage(p._id, 'portfolio')}>Eliminar</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* REDES SOCIALES */}
         <section className={styles.section}>
           <p className={styles.sectionLabel}>Redes sociales</p>
           <div className={styles.socialForm}>
@@ -147,37 +267,10 @@ export default function AdminPanel({ data: initialData }: { data: SiteData }) {
                 <label>{key.charAt(0).toUpperCase() + key.slice(1)}</label>
                 <input
                   type="url"
-                  value={data.social[key]}
-                  onChange={e => setData(d => ({ ...d, social: { ...d.social, [key]: e.target.value } }))}
+                  value={social[key]}
+                  onChange={e => setSocial(s => ({ ...s, [key]: e.target.value }))}
                   placeholder={`https://${key}.com/...`}
                 />
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* PHOTOS */}
-        <section className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <p className={styles.sectionLabel}>Fotos ({data.photos.length})</p>
-            <button className={`${styles.btn} ${styles.primary}`} onClick={() => setShowAdd(true)}>
-              + Agregar foto
-            </button>
-          </div>
-          <div className={styles.photoGrid}>
-            {data.photos.map(p => (
-              <div key={p.id} className={styles.photoItem}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={p.file} alt={p.title} loading="lazy" />
-                <div className={styles.photoInfo}>
-                  <span className={styles.photoTitle}>{p.title}</span>
-                  <span className={styles.photoCat}>{CAT_LABEL[p.cat]}</span>
-                  <span className={styles.photoLoc}>{p.loc}</span>
-                </div>
-                <div className={styles.photoActions}>
-                  <button className={styles.actionBtn} onClick={() => setEditPhoto({ ...p })}>Editar</button>
-                  <button className={`${styles.actionBtn} ${styles.del}`} onClick={() => deletePhoto(p.id)}>Eliminar</button>
-                </div>
               </div>
             ))}
           </div>
@@ -185,17 +278,23 @@ export default function AdminPanel({ data: initialData }: { data: SiteData }) {
       </div>
 
       {/* EDIT MODAL */}
-      {editPhoto && (
-        <div className={styles.overlay} onClick={e => { if (e.target === e.currentTarget) setEditPhoto(null) }}>
+      {editImage && (
+        <div className={styles.overlay} onClick={e => { if (e.target === e.currentTarget) setEditImage(null) }}>
           <div className={styles.modal}>
             <h3>Editar foto</h3>
             <div className={styles.modalField}>
               <label>Título</label>
-              <input value={editPhoto.title} onChange={e => setEditPhoto(p => p && ({ ...p, title: e.target.value }))} />
+              <input
+                value={editImage.title}
+                onChange={e => setEditImage(p => p && ({ ...p, title: e.target.value }))}
+              />
             </div>
             <div className={styles.modalField}>
               <label>Categoría</label>
-              <select value={editPhoto.cat} onChange={e => setEditPhoto(p => p && ({ ...p, cat: e.target.value as Photo['cat'] }))}>
+              <select
+                value={editImage.cat}
+                onChange={e => setEditImage(p => p && ({ ...p, cat: e.target.value as Image['cat'] }))}
+              >
                 <option value="landscape">Paisaje</option>
                 <option value="street">Urbana</option>
                 <option value="portrait">Retrato</option>
@@ -203,11 +302,14 @@ export default function AdminPanel({ data: initialData }: { data: SiteData }) {
             </div>
             <div className={styles.modalField}>
               <label>Ubicación</label>
-              <input value={editPhoto.loc} onChange={e => setEditPhoto(p => p && ({ ...p, loc: e.target.value }))} />
+              <input
+                value={editImage.loc}
+                onChange={e => setEditImage(p => p && ({ ...p, loc: e.target.value }))}
+              />
             </div>
             <div className={styles.modalActions}>
               <button className={`${styles.btn} ${styles.primary}`} onClick={saveEdit}>Guardar</button>
-              <button className={styles.btn} onClick={() => setEditPhoto(null)}>Cancelar</button>
+              <button className={styles.btn} onClick={() => setEditImage(null)}>Cancelar</button>
             </div>
           </div>
         </div>
@@ -215,9 +317,25 @@ export default function AdminPanel({ data: initialData }: { data: SiteData }) {
 
       {/* ADD MODAL */}
       {showAdd && (
-        <div className={styles.overlay} onClick={e => { if (e.target === e.currentTarget) setShowAdd(false) }}>
+        <div className={styles.overlay} onClick={e => { if (e.target === e.currentTarget) { setShowAdd(false); resetAddForm() } }}>
           <div className={styles.modal}>
-            <h3>Agregar foto</h3>
+            <h3>{addSection === 'hero' ? 'Agregar portada' : 'Agregar foto'}</h3>
+
+            {/* Section selector */}
+            <div className={styles.modalField}>
+              <label>Sección</label>
+              <select
+                value={addSection}
+                onChange={e => setAddSection(e.target.value as 'hero' | 'portfolio')}
+              >
+                <option value="hero" disabled={hero.length >= HERO_MAX}>
+                  Portada{hero.length >= HERO_MAX ? ' (llena)' : ` (${hero.length}/${HERO_MAX})`}
+                </option>
+                <option value="portfolio">Portafolio</option>
+              </select>
+            </div>
+
+            {/* Image picker */}
             <div
               className={styles.uploadZone}
               onClick={() => fileRef.current?.click()}
@@ -228,29 +346,55 @@ export default function AdminPanel({ data: initialData }: { data: SiteData }) {
                 ? <img src={addPreview} alt="preview" style={{ width: '100%', height: '200px', objectFit: 'cover' }} />
                 : <p>Hacé click para elegir una imagen</p>
               }
-              <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFileChange} />
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={onFileChange}
+              />
             </div>
+
+            {/* Metadata fields — always shown, required for portfolio */}
             <div className={styles.modalField}>
-              <label>Título</label>
-              <input value={addTitle} onChange={e => setAddTitle(e.target.value)} placeholder="Sin título" />
+              <label>Título{addSection === 'portfolio' ? '' : ' (opcional)'}</label>
+              <input
+                value={addTitle}
+                onChange={e => setAddTitle(e.target.value)}
+                placeholder="Sin título"
+              />
             </div>
-            <div className={styles.modalField}>
-              <label>Categoría</label>
-              <select value={addCat} onChange={e => setAddCat(e.target.value as Photo['cat'])}>
-                <option value="landscape">Paisaje</option>
-                <option value="street">Urbana</option>
-                <option value="portrait">Retrato</option>
-              </select>
-            </div>
-            <div className={styles.modalField}>
-              <label>Ubicación</label>
-              <input value={addLoc} onChange={e => setAddLoc(e.target.value)} placeholder="Montevideo" />
-            </div>
+
+            {addSection === 'portfolio' && (
+              <>
+                <div className={styles.modalField}>
+                  <label>Categoría</label>
+                  <select value={addCat} onChange={e => setAddCat(e.target.value as Image['cat'])}>
+                    <option value="landscape">Paisaje</option>
+                    <option value="street">Urbana</option>
+                    <option value="portrait">Retrato</option>
+                  </select>
+                </div>
+                <div className={styles.modalField}>
+                  <label>Ubicación</label>
+                  <input
+                    value={addLoc}
+                    onChange={e => setAddLoc(e.target.value)}
+                    placeholder="Montevideo"
+                  />
+                </div>
+              </>
+            )}
+
             <div className={styles.modalActions}>
-              <button className={`${styles.btn} ${styles.primary}`} onClick={submitAdd} disabled={uploading}>
+              <button
+                className={`${styles.btn} ${styles.primary}`}
+                onClick={submitAdd}
+                disabled={uploading}
+              >
                 {uploading ? 'Subiendo…' : 'Agregar'}
               </button>
-              <button className={styles.btn} onClick={() => setShowAdd(false)}>Cancelar</button>
+              <button className={styles.btn} onClick={() => { setShowAdd(false); resetAddForm() }}>Cancelar</button>
             </div>
           </div>
         </div>

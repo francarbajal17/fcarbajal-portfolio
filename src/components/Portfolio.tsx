@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import type { SiteData, Photo } from '@/lib/data'
+import type { SiteData, Image } from '@/lib/data'
 import styles from './Portfolio.module.css'
 
 const CAT_LABEL: Record<string, string> = {
@@ -11,30 +11,33 @@ const CAT_LABEL: Record<string, string> = {
 }
 
 export default function Portfolio({ data }: { data: SiteData }) {
-  const { covers, photos, social } = data
+  const { hero, portfolio, social } = data
 
-  // Hero slideshow
+  // Hero slideshow — only active when there are 2+ hero images
   const [heroIdx, setHeroIdx] = useState(0)
   const heroTimer = useRef<ReturnType<typeof setInterval>>()
 
   const goHero = useCallback((idx: number) => {
     setHeroIdx(idx)
     clearInterval(heroTimer.current)
-    heroTimer.current = setInterval(() => {
-      setHeroIdx(i => (i + 1) % covers.length)
-    }, 5000)
-  }, [covers.length])
+    if (hero.length > 1) {
+      heroTimer.current = setInterval(() => {
+        setHeroIdx(i => (i + 1) % hero.length)
+      }, 5000)
+    }
+  }, [hero.length])
 
   useEffect(() => {
+    if (hero.length <= 1) return
     heroTimer.current = setInterval(() => {
-      setHeroIdx(i => (i + 1) % covers.length)
+      setHeroIdx(i => (i + 1) % hero.length)
     }, 5000)
     return () => clearInterval(heroTimer.current)
-  }, [covers.length])
+  }, [hero.length])
 
   // Gallery filter
   const [filter, setFilter] = useState('all')
-  const visible = filter === 'all' ? photos : photos.filter(p => p.cat === filter)
+  const visible = filter === 'all' ? portfolio : portfolio.filter(p => p.cat === filter)
 
   // Lightbox
   const [lbIdx, setLbIdx] = useState<number | null>(null)
@@ -93,7 +96,7 @@ export default function Portfolio({ data }: { data: SiteData }) {
 
       {/* MOBILE MENU */}
       <div className={`${styles.mobMenu} ${menuOpen ? styles.open : ''}`}>
-        {['#gallery', '#about', '#contact'].map((href, i) => (
+        {(['#gallery', '#about', '#contact'] as const).map((href, i) => (
           <a key={href} href={href} onClick={() => setMenuOpen(false)}>
             {['Trabajo', 'Sobre mí', 'Contacto'][i]}
           </a>
@@ -102,59 +105,67 @@ export default function Portfolio({ data }: { data: SiteData }) {
 
       {/* HERO */}
       <section id="hero" className={styles.hero}>
-        {covers.map((src, i) => (
+        {hero.map((img, i) => (
           <div
-            key={src}
+            key={img._id}
             className={`${styles.heroSlide} ${i === heroIdx ? styles.active : ''}`}
-            style={{ backgroundImage: `url(${src})` }}
+            style={{ backgroundImage: `url(${img.url})` }}
           />
         ))}
         <div className={styles.heroVignette} />
         <div className={styles.heroContent}>
-          <div className={styles.heroDots}>
-            {covers.map((_, i) => (
-              <button
-                key={i}
-                className={`${styles.heroDot} ${i === heroIdx ? styles.active : ''}`}
-                onClick={() => goHero(i)}
-                aria-label={`Portada ${i + 1}`}
-              />
-            ))}
-          </div>
+          {hero.length > 1 && (
+            <div className={styles.heroDots}>
+              {hero.map((_, i) => (
+                <button
+                  key={i}
+                  className={`${styles.heroDot} ${i === heroIdx ? styles.active : ''}`}
+                  onClick={() => goHero(i)}
+                  aria-label={`Portada ${i + 1}`}
+                />
+              ))}
+            </div>
+          )}
           <h1 className={styles.heroName}>
             Francisco<br /><em>Carbajal</em>
           </h1>
           <p className={styles.heroSub}>Paisaje · Urbana · Retrato · Montevideo</p>
           <div className={styles.heroSocials}>
-            <a href={social.instagram} target="_blank" rel="noopener noreferrer" className={styles.socialLink}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <rect x="2" y="2" width="20" height="20" rx="5"/>
-                <circle cx="12" cy="12" r="4"/>
-                <circle cx="17.5" cy="6.5" r="0.8" fill="currentColor" stroke="none"/>
-              </svg>
-              Instagram
-            </a>
-            <div className={styles.socialSep} />
-            <a href={social.linkedin} target="_blank" rel="noopener noreferrer" className={styles.socialLink}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6z"/>
-                <rect x="2" y="9" width="4" height="12"/>
-                <circle cx="4" cy="4" r="2"/>
-              </svg>
-              LinkedIn
-            </a>
-            <div className={styles.socialSep} />
-            <a href={social.vsco} target="_blank" rel="noopener noreferrer" className={styles.socialLink}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <circle cx="12" cy="12" r="10"/>
-                <circle cx="12" cy="12" r="4"/>
-                <line x1="12" y1="2" x2="12" y2="5"/>
-                <line x1="12" y1="19" x2="12" y2="22"/>
-                <line x1="2" y1="12" x2="5" y2="12"/>
-                <line x1="19" y1="12" x2="22" y2="12"/>
-              </svg>
-              VSCO
-            </a>
+            {social.instagram && (
+              <a href={social.instagram} target="_blank" rel="noopener noreferrer" className={styles.socialLink}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <rect x="2" y="2" width="20" height="20" rx="5"/>
+                  <circle cx="12" cy="12" r="4"/>
+                  <circle cx="17.5" cy="6.5" r="0.8" fill="currentColor" stroke="none"/>
+                </svg>
+                Instagram
+              </a>
+            )}
+            {social.instagram && social.linkedin && <div className={styles.socialSep} />}
+            {social.linkedin && (
+              <a href={social.linkedin} target="_blank" rel="noopener noreferrer" className={styles.socialLink}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6z"/>
+                  <rect x="2" y="9" width="4" height="12"/>
+                  <circle cx="4" cy="4" r="2"/>
+                </svg>
+                LinkedIn
+              </a>
+            )}
+            {social.linkedin && social.vsco && <div className={styles.socialSep} />}
+            {social.vsco && (
+              <a href={social.vsco} target="_blank" rel="noopener noreferrer" className={styles.socialLink}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <circle cx="12" cy="12" r="10"/>
+                  <circle cx="12" cy="12" r="4"/>
+                  <line x1="12" y1="2" x2="12" y2="5"/>
+                  <line x1="12" y1="19" x2="12" y2="22"/>
+                  <line x1="2" y1="12" x2="5" y2="12"/>
+                  <line x1="19" y1="12" x2="22" y2="12"/>
+                </svg>
+                VSCO
+              </a>
+            )}
           </div>
         </div>
       </section>
@@ -162,7 +173,7 @@ export default function Portfolio({ data }: { data: SiteData }) {
       {/* GALLERY */}
       <section id="gallery" className={styles.gallery}>
         <div className={styles.filterRow}>
-          {['all', 'landscape', 'street', 'portrait'].map(f => (
+          {(['all', 'landscape', 'street', 'portrait'] as const).map(f => (
             <button
               key={f}
               className={`${styles.filterBtn} ${filter === f ? styles.active : ''}`}
@@ -172,29 +183,35 @@ export default function Portfolio({ data }: { data: SiteData }) {
             </button>
           ))}
         </div>
-        <div className={styles.grid}>
-          {photos.map(p => (
-            <div
-              key={p.id}
-              className={`${styles.gridItem} ${filter !== 'all' && p.cat !== filter ? styles.hidden : ''}`}
-              onClick={() => {
-                const idx = visible.findIndex(x => x.id === p.id)
-                if (idx >= 0) openLb(idx)
-              }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.file} alt={p.title} loading="lazy" />
-              <div className={styles.itemOverlay}>
-                <div className={styles.itemTitle}>{p.title}</div>
-                <div className={styles.itemCat}>{CAT_LABEL[p.cat]}</div>
+        {portfolio.length === 0 ? (
+          <p style={{ color: 'var(--muted)', fontSize: '13px', letterSpacing: '.08em' }}>
+            No hay fotos en el portafolio todavía.
+          </p>
+        ) : (
+          <div className={styles.grid}>
+            {portfolio.map(p => (
+              <div
+                key={p._id}
+                className={`${styles.gridItem} ${filter !== 'all' && p.cat !== filter ? styles.hidden : ''}`}
+                onClick={() => {
+                  const idx = visible.findIndex(x => x._id === p._id)
+                  if (idx >= 0) openLb(idx)
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.url} alt={p.title} loading="lazy" />
+                <div className={styles.itemOverlay}>
+                  <div className={styles.itemTitle}>{p.title}</div>
+                  <div className={styles.itemCat}>{CAT_LABEL[p.cat]}</div>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* LIGHTBOX */}
-      {lbIdx !== null && (
+      {lbIdx !== null && visible.length > 0 && (
         <div
           className={styles.lb}
           onClick={e => { if (e.target === e.currentTarget) closeLb() }}
@@ -209,7 +226,7 @@ export default function Portfolio({ data }: { data: SiteData }) {
           <button className={`${styles.lbNav} ${styles.lbPrev}`} onClick={() => navLb(-1)}>←</button>
           <div className={styles.lbImg}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={visible[lbIdx].file} alt={visible[lbIdx].title} />
+            <img src={visible[lbIdx].url} alt={visible[lbIdx].title} />
           </div>
           <button className={`${styles.lbNav} ${styles.lbNext}`} onClick={() => navLb(1)}>→</button>
           <div className={styles.lbInfo}>
@@ -244,9 +261,9 @@ export default function Portfolio({ data }: { data: SiteData }) {
           © 2026 Francisco Carbajal
         </span>
         <div style={{ display: 'flex', gap: '20px' }}>
-          <a href={social.instagram} target="_blank" rel="noopener noreferrer">Instagram</a>
-          <a href={social.linkedin} target="_blank" rel="noopener noreferrer">LinkedIn</a>
-          <a href={social.vsco} target="_blank" rel="noopener noreferrer">VSCO</a>
+          {social.instagram && <a href={social.instagram} target="_blank" rel="noopener noreferrer">Instagram</a>}
+          {social.linkedin && <a href={social.linkedin} target="_blank" rel="noopener noreferrer">LinkedIn</a>}
+          {social.vsco && <a href={social.vsco} target="_blank" rel="noopener noreferrer">VSCO</a>}
         </div>
       </footer>
     </>
